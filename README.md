@@ -2,6 +2,8 @@
 
 **wavesurfer.js 的节拍感知编辑层** — 自动 BPM 检测、相位对齐节拍网格、吸附、按小节循环。
 
+**在线演示：<https://llinok111.github.io/beatgrid-studio/>**（本地运行见下文）
+
 基于 [wavesurfer.js](https://github.com/katspaugh/wavesurfer.js) v8.0.3 二次开发。
 上游是波形渲染与播放库，**没有任何音乐时间概念**：没有 BPM、没有节拍网格、没有吸附、没有按小节循环。
 本项目在不修改上游任何既有文件行为的前提下，补上这一层。

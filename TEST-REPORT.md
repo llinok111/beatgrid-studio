@@ -133,7 +133,24 @@ npm run build
 
 ---
 
-## 8. 如何复现
+## 8. 线上部署复验
+
+对 `https://llinok111.github.io/beatgrid-studio/` 直接执行同一套 `tools/verify.mjs`：
+
+```
+总计 30 项，通过 30，失败 0
+重绘   mean 0.36 ms  p95 0.70 ms
+分析   mean 58 ms    p95 70 ms（约 30s 音频）
+帧间隔 mean 6.9 ms   p95 7.2 ms
+```
+
+说明：首次对线上地址执行时 `waitUntil: 'networkidle'` 超时（2.7 MB WAV 跨境下载使
+500 ms 空闲窗口无法在 30 s 内出现）。已改为等待应用自身的就绪信号（`getState().bpm > 0`），
+比等待网络空闲更快也更严格。
+
+---
+
+## 9. 如何复现
 
 ```bash
 npm install --legacy-peer-deps
@@ -152,7 +169,7 @@ node tools/check-shots.mjs
 
 ---
 
-## 9. 未覆盖 / 已知风险
+## 10. 未覆盖 / 已知风险
 
 1. **真实商业录音未测**。全部素材为程序化合成，编曲可控、真值明确，但不等于对真实
    混音作品的泛化能力。真实音乐中的弱拍、切分、渐快会降低精度。

@@ -45,7 +45,11 @@ page.on('console', (message) => {
 })
 page.on('pageerror', (error) => pageErrors.push(error.message))
 
-await page.goto(`${baseUrl}/demo/index.html`, { waitUntil: 'networkidle' })
+// Not `networkidle`: the demo streams a multi-megabyte WAV, and over a slow
+// cross-border link to GitHub Pages the 500 ms idle window never arrives within
+// the default 30 s (observed timeout against the live deployment). Waiting for
+// the app's own readiness signal below is both faster and a stronger check.
+await page.goto(`${baseUrl}/demo/index.html`, { waitUntil: 'domcontentloaded', timeout: 60000 })
 
 // ── 1. Page loads without script errors ──────────────────────────────────
 record('页面无 JS 异常', pageErrors.length === 0, pageErrors.join(' | ').slice(0, 300))
