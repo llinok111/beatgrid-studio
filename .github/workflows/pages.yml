@@ -1,0 +1,64 @@
+name: Deploy demo to GitHub Pages
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The upstream lockfile is a yarn.lock, and its devDependencies contain a
+      # peer conflict (cypress 13 vs cypress-image-snapshot requiring cypress
+      # ^4.5.0). --legacy-peer-deps is required for npm to install it at all.
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build library
+        run: npm run build
+
+      # Assemble exactly what Pages should serve: the built library plus the
+      # demo. demo/index.html imports '../dist/...', which resolves correctly
+      # from /demo/ inside this layout.
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp -r dist demo _site/
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>BeatGrid Studio</title>
+          <meta http-equiv="refresh" content="0; url=./demo/">
+          <link rel="canonical" href="./demo/">
+          <p>Redirecting to <a href="./demo/">the demo</a>…</p>
+          HTML
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

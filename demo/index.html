@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BeatGrid Studio — wavesurfer.js 节拍感知编辑层</title>
+    <meta
+      name="description"
+      content="wavesurfer.js 的节拍感知扩展：自动 BPM 检测、相位对齐网格、吸附、按小节循环。"
+    />
+    <link rel="stylesheet" href="./demo.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23241b15'/%3E%3Cg fill='%23e8a33d'%3E%3Crect x='7' y='9' width='2' height='14'/%3E%3Crect x='12' y='12' width='2' height='11'/%3E%3Crect x='17' y='8' width='2' height='16'/%3E%3Crect x='22' y='13' width='2' height='9'/%3E%3C/g%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">跳到工作区</a>
+
+    <header class="masthead">
+      <div class="masthead__brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>BeatGrid <em>Studio</em></h1>
+          <p class="tagline">wavesurfer.js 的节拍感知编辑层 · 自动 BPM · 相位对齐网格 · 吸附 · 按小节循环</p>
+        </div>
+      </div>
+      <nav class="masthead__links" aria-label="项目链接">
+        <a href="#method">方法</a>
+        <a href="#results">测试结果</a>
+        <a href="https://github.com/katspaugh/wavesurfer.js" target="_blank" rel="noreferrer noopener"
+          >上游 wavesurfer.js ↗</a
+        >
+      </nav>
+    </header>
+
+    <main id="workspace" class="workspace">
+      <!-- ══ 左栏：轨道与传输控制 ══ -->
+      <section class="panel panel--tracks" aria-labelledby="tracks-heading">
+        <h2 id="tracks-heading" class="panel__title">音轨</h2>
+        <p class="panel__hint">合成鼓点，BPM 为生成时的真值，可与检测结果直接比对。</p>
+
+        <ul class="track-list" id="track-list" role="list"></ul>
+
+        <div class="transport">
+          <button id="play" class="btn btn--primary" type="button" aria-keyshortcuts="Space">
+            <span class="btn__icon" aria-hidden="true">▶</span>
+            <span class="btn__label">播放</span>
+          </button>
+          <div class="transport__meta">
+            <span id="clock" class="clock" role="timer" aria-live="off">0:00.00</span>
+            <span id="duration" class="clock clock--muted">/ 0:00</span>
+          </div>
+        </div>
+
+        <label class="volume">
+          <span>音量</span>
+          <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+        </label>
+
+        <div class="kbd-hints">
+          <p><kbd>Space</kbd> 播放/暂停 · <kbd>L</kbd> 循环当前小节 · <kbd>T</kbd> 打拍 · <kbd>←</kbd><kbd>→</kbd> 微调相位</p>
+        </div>
+      </section>
+
+      <!-- ══ 中栏：波形与网格 ══ -->
+      <section class="panel panel--stage" aria-labelledby="stage-heading">
+        <div class="stage__head">
+          <h2 id="stage-heading" class="panel__title">波形与节拍网格</h2>
+          <div class="stage__badges">
+            <span class="badge" id="badge-bpm" aria-live="polite">BPM —</span>
+            <span class="badge badge--ghost" id="badge-conf">置信度 —</span>
+            <span class="badge badge--ghost" id="badge-onsets">瞬态 —</span>
+          </div>
+        </div>
+
+        <div class="stage__wave" id="waveform" aria-label="音频波形，带节拍网格叠加"></div>
+
+        <div class="stage__legend" aria-hidden="true">
+          <span><i class="swatch swatch--bar"></i>小节线</span>
+          <span><i class="swatch swatch--beat"></i>拍</span>
+          <span><i class="swatch swatch--sub"></i>细分</span>
+          <span><i class="swatch swatch--onset"></i>检测到的瞬态</span>
+          <span><i class="swatch swatch--loop"></i>循环区</span>
+        </div>
+
+        <div class="stage__loop" role="group" aria-label="循环控制">
+          <button id="loop-bar" class="btn btn--outline" type="button">循环当前小节</button>
+          <button id="loop-clear" class="btn btn--ghost" type="button">取消循环</button>
+          <label class="loop-len">
+            <span>循环长度</span>
+            <select id="loop-bars" aria-label="循环小节数">
+              <option value="1" selected>1 小节</option>
+              <option value="2">2 小节</option>
+              <option value="4">4 小节</option>
+              <option value="8">8 小节</option>
+            </select>
+          </label>
+          <span id="loop-status" class="loop-status" aria-live="polite">未启用</span>
+        </div>
+      </section>
+
+      <!-- ══ 右栏：分析参数 ══ -->
+      <section class="panel panel--controls" aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="panel__title">网格参数</h2>
+
+        <div class="field">
+          <label for="bpm">BPM <output id="bpm-out">—</output></label>
+          <input id="bpm" type="range" min="60" max="200" step="0.1" value="120" />
+        </div>
+
+        <div class="field">
+          <label for="phase">相位偏移 <output id="phase-out">0 ms</output></label>
+          <input id="phase" type="range" min="-250" max="250" step="1" value="0" />
+        </div>
+
+        <div class="field-row">
+          <div class="field field--compact">
+            <label for="beats">每小节拍数</label>
+            <select id="beats">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+          </div>
+          <div class="field field--compact">
+            <label for="subdiv">细分</label>
+            <select id="subdiv">
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="sensitivity">检测灵敏度 <output id="sens-out">0.50</output></label>
+          <input id="sensitivity" type="range" min="0" max="1" step="0.05" value="0.5" />
+        </div>
+
+        <div class="toggles">
+          <label class="switch">
+            <input id="show-grid" type="checkbox" checked />
+            <span>显示网格</span>
+          </label>
+          <label class="switch">
+            <input id="show-onsets" type="checkbox" checked />
+            <span>显示瞬态</span>
+          </label>
+          <label class="switch">
+            <input id="snap-regions" type="checkbox" />
+            <span>区域吸附到网格</span>
+          </label>
+        </div>
+
+        <div class="tap">
+          <button id="tap" class="btn btn--tap" type="button">打拍定速 <kbd>T</kbd></button>
+          <p id="tap-hint" class="tap__hint">连续点击 2 次以上，取平均间隔。</p>
+        </div>
+
+        <div class="actions">
+          <button id="reanalyze" class="btn btn--outline" type="button">重新分析</button>
+          <button id="reset" class="btn btn--ghost" type="button">重置网格</button>
+        </div>
+
+        <details class="readout">
+          <summary>检测明细</summary>
+          <dl>
+            <dt>检测 BPM</dt>
+            <dd id="ro-bpm">—</dd>
+            <dt>真值 BPM</dt>
+            <dd id="ro-truth">—</dd>
+            <dt>误差</dt>
+            <dd id="ro-error">—</dd>
+            <dt>瞬态数</dt>
+            <dd id="ro-onsets">—</dd>
+            <dt>相位置信度</dt>
+            <dd id="ro-conf">—</dd>
+            <dt>网格线数</dt>
+            <dd id="ro-lines">—</dd>
+          </dl>
+        </details>
+      </section>
+    </main>
+
+    <!-- ══ 说明区 ══ -->
+    <section id="method" class="prose">
+      <h2>它解决了什么</h2>
+      <p>
+        wavesurfer.js 负责渲染与播放，但<b>没有音乐时间的概念</b>：没有 BPM、没有节拍网格、没有吸附、没有按小节循环。
+        上游在 2023 年把多轨功能拆成独立仓库（<a
+          href="https://github.com/katspaugh/wavesurfer-multitrack"
+          target="_blank"
+          rel="noreferrer noopener"
+          >wavesurfer-multitrack</a
+        >，44★），因此本项目的方向不是重做多轨，而是补上<b>节拍这一层</b>。
+      </p>
+
+      <h3>检测流程</h3>
+      <ol class="pipeline">
+        <li><b>STFT</b> — 1024 点 Hann 窗，跳步 256，复用上游的 <code>fft.ts</code></li>
+        <li><b>对数压缩谱通量</b> — <code>log1p</code> 后取正向差分，弱瞬态不会被强拍淹没</li>
+        <li><b>自适应阈值峰值拾取</b> — 100 ms 滑动均值 × 灵敏度系数，附局部极大与最小间隔约束</li>
+        <li><b>梳状评分</b> — 包络能量落在候选周期整数倍上的比例</li>
+        <li><b>齿能量均匀性</b> — 1/(1+CV)，用来破除倍频错误</li>
+        <li><b>齿覆盖率</b> — 防止结果漂移到半速</li>
+        <li><b>相位拟合</b> — 1 ms 步长扫描，加权求最优首拍位置</li>
+      </ol>
+
+      <h3>三个真实踩到的坑（已写进测试）</h3>
+      <ul class="traps">
+        <li>
+          <b>帧时间戳必须取窗中心</b>。取窗起点会让每个瞬态系统性早报约 29 ms（1024 窗 @22.05 kHz，实测均值 −29.0 ms）。
+        </li>
+        <li>
+          <b>纯梳状评分必然选 2 倍速</b>。更密的梳齿必然收集更多能量（实测 192 BPM 得 0.183，96 BPM 只有 0.160）。
+          加入齿能量均匀性后才正确（0.74 对 0.55）。
+        </li>
+        <li>
+          <b>相位扫描不能锚定在 t=0</b>。起点不在网格上的片段会被误判（实测 0.50 对 0.88）。改为锚定首个瞬态后修复。
+        </li>
+      </ul>
+    </section>
+
+    <section id="results" class="prose">
+      <h2>测试结果</h2>
+      <p class="prose__note">
+        下列数字来自本机实际执行，未做估算。运行环境：Windows / Node 22 / Chromium 156（headless）。
+      </p>
+      <div class="results-grid" id="results-grid">
+        <div class="result-card">
+          <span class="result-card__value" id="res-tests">—</span>
+          <span class="result-card__label">单元测试通过</span>
+        </div>
+        <div class="result-card">
+          <span class="result-card__value" id="res-upstream">—</span>
+          <span class="result-card__label">上游测试保持通过</span>
+        </div>
+        <div class="result-card">
+          <span class="result-card__value" id="res-accuracy">—</span>
+          <span class="result-card__label">4 首鼓点 BPM 误差</span>
+        </div>
+        <div class="result-card">
+          <span class="result-card__value" id="res-analysis">—</span>
+          <span class="result-card__label">30 s 音频分析耗时</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>
+        基于 <a href="https://github.com/katspaugh/wavesurfer.js" target="_blank" rel="noreferrer noopener">wavesurfer.js</a>
+        v8.0.3（BSD-3-Clause，© 2012-2023 katspaugh and contributors）。新增的节拍分析层与网格插件同样以 BSD-3-Clause 发布。
+      </p>
+      <p class="footer__meta">演示音频由 <code>scripts/make-demo-audio.mjs</code> 程序化合成，无第三方素材。</p>
+    </footer>
+
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>

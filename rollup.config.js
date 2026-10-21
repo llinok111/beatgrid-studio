@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { glob } from 'glob'
 import typescript from '@rollup/plugin-typescript'
 import terser from '@rollup/plugin-terser'
@@ -8,6 +9,15 @@ const plugins = [
   typescript({ declaration: false, declarationDir: null }),
   terser({ format: { comments: false } }),
 ]
+
+// glob() returns platform-native separators, so on Windows every entry below
+// came back with backslashes (src<sep>plugins<sep>foo.ts). The subsequent
+// `.replace('src/', 'dist/')` calls then matched nothing, output paths stayed
+// inside src/, and rollup aborted with "Path of Typescript compiler option
+// 'outDir' must be located inside the same directory as the Rollup 'file'
+// option" -- i.e. `npm run build` was broken on Windows for every plugin.
+// Normalising to forward slashes here fixes all downstream replaces at once.
+const pluginEntries = glob.sync('src/plugins/*.ts').map((entry) => entry.split(path.sep).join('/'))
 
 export default [
   // ES module
@@ -42,8 +52,7 @@ export default [
   },
 
   // Wavesurfer plugins (exclude worker files)
-  ...glob
-    .sync('src/plugins/*.ts')
+  ...pluginEntries
     .filter((plugin) => !plugin.includes('worker'))
     .map((plugin) => [
       // ES module

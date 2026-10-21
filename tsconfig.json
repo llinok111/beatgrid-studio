@@ -18,6 +18,7 @@
     "node_modules",
     "cypress",
     "dist",
-    "src/**/__tests__"
+    "src/**/__tests__",
+    "scripts/**/*.test.ts"
   ]
 }

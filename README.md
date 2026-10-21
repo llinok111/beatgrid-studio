@@ -1,234 +1,188 @@
-# <img src="https://user-images.githubusercontent.com/381895/226091100-f5567a28-7736-4d37-8f84-e08f297b7e1a.png" alt="logo" height="60" valign="middle" /> wavesurfer.js
+# BeatGrid Studio
 
-[![npm](https://img.shields.io/npm/v/wavesurfer.js)](https://www.npmjs.com/package/wavesurfer.js) [![sponsor](https://img.shields.io/badge/sponsor_us-🤍-%23B14586)](https://github.com/sponsors/katspaugh) [![DigitalOcean](https://img.shields.io/badge/-DigitalOcean-555?&logo=DigitalOcean)](https://m.do.co/c/b2fb57f5cf9a)
+**wavesurfer.js 的节拍感知编辑层** — 自动 BPM 检测、相位对齐节拍网格、吸附、按小节循环。
 
-**Wavesurfer.js** is an interactive waveform rendering and audio playback library, perfect for web applications. It leverages modern web technologies to provide a robust and visually engaging audio experience.
-
-<img width="626" alt="waveform screenshot" src="https://github.com/katspaugh/wavesurfer.js/assets/381895/05f03bed-800e-4fa1-b09a-82a39a1c62ce">
+基于 [wavesurfer.js](https://github.com/katspaugh/wavesurfer.js) v8.0.3 二次开发。
+上游是波形渲染与播放库，**没有任何音乐时间概念**：没有 BPM、没有节拍网格、没有吸附、没有按小节循环。
+本项目在不修改上游任何既有文件行为的前提下，补上这一层。
 
 ---
-### Gold Sponsor 💖 [Closed Caption Creator](https://www.closedcaptioncreator.com) – Professional Subtitle Editor
+
+## 它解决什么
+
+| 能力 | 上游 wavesurfer.js v8 | 本项目 |
+|---|---|---|
+| 波形渲染 / 播放 / 缩放 / 滚动 | ✅ | 沿用（未改动） |
+| 区域（regions）拖拽与缩放 | ✅ | 沿用，并可选择吸附到节拍 |
+| BPM 检测 | ❌ | ✅ STFT 谱通量 + 梳状评分 |
+| 瞬态（onset）检测 | ❌ | ✅ 自适应阈值峰值拾取 |
+| 节拍网格叠加层 | ❌ | ✅ 小节 / 拍 / 细分三级层级 |
+| 吸附（时间与区间量化） | ❌ | ✅ `snapTime` / `snapRange` |
+| 按小节循环 | ❌ | ✅ 无缝循环 + 播放头回绕 |
+| 打拍定速（tap tempo） | ❌ | ✅ 最近 8 次取平均 |
+
+> 关于「多轨」：上游已于 2023 年把多轨功能拆到独立仓库
+> [wavesurfer-multitrack](https://github.com/katspaugh/wavesurfer-multitrack)（44★）。
+> 本项目**不重做多轨**，专注补上缺失的节拍层。
+
 ---
 
-# Table of contents
-
-1. [Getting started](#getting-started)
-2. [API reference](#api-reference)
-3. [Plugins](#plugins)
-4. [Advanced / reactive API](#advanced--reactive-api)
-5. [CSS styling](#css-styling)
-6. [Frequent questions](#questions)
-7. [Development](#development)
-8. [Tests](#tests)
-9. [Feedback](#feedback)
-
-## Getting started
-
-Install and import the package:
+## 快速开始
 
 ```bash
-npm install --save wavesurfer.js
+# 1. 安装依赖（上游用 yarn.lock；npm 需要 --legacy-peer-deps 绕过 cypress 的 peer 冲突）
+npm install --legacy-peer-deps
+
+# 2. 构建库产物（tsc + rollup + 导出校验）
+npm run build
+
+# 3. 生成演示音频（程序化合成，无第三方素材）
+node scripts/make-demo-audio.mjs
+
+# 4. 起一个静态服务，然后打开 /demo/index.html
+python -m http.server 8899 --bind 127.0.0.1
+# → http://127.0.0.1:8899/demo/index.html
 ```
+
+演示页依赖 `dist/` 产物，所以必须先 `npm run build`。
+
+### 在你自己项目里使用
+
 ```js
 import WaveSurfer from 'wavesurfer.js'
-```
+import BeatGridPlugin from 'wavesurfer.js/plugins/beatgrid'
 
-Alternatively, insert a UMD script tag which exports the library as a global `WaveSurfer` variable:
-```html
-<script src="https://unpkg.com/wavesurfer.js@8"></script>
-```
+const beatgrid = BeatGridPlugin.create({
+  beatsPerBar: 4,
+  subdivisions: 2,
+  snapRegions: true,   // 区域拖拽结束后吸附到拍
+  showOnsets: true,
+})
 
-Create a wavesurfer instance and pass various [options](https://wavesurfer.xyz/docs/api/options):
-```js
 const wavesurfer = WaveSurfer.create({
   container: '#waveform',
-  waveColor: '#4F4A85',
-  progressColor: '#383351',
-  url: '/audio.mp3',
+  url: 'track.mp3',
+  plugins: [beatgrid],
 })
-```
 
-To import one of the plugins, e.g. the [Regions plugin](https://wavesurfer.xyz/examples/?regions.js):
-```js
-import Regions from 'wavesurfer.js/dist/plugins/regions.esm.js'
-```
-
-Or as a script tag that will export `WaveSurfer.Regions`:
-```html
-<script src="https://unpkg.com/wavesurfer.js@8/dist/plugins/regions.min.js"></script>
-```
-
-TypeScript types are included in the package, so there's no need to install `@types/wavesurfer.js`.
-
-See more [examples](https://wavesurfer.xyz/examples).
-
-## Documentation
-
-See the [wavesurfer.js guide](https://wavesurfer.xyz/docs/) on our website for beginner-friendly, practical documentation covering common use cases, plugins, framework integration, and troubleshooting.
-
-## API reference
-
-The full generated API reference lives at [wavesurfer.xyz/docs/api](https://wavesurfer.xyz/docs/api/):
-
- * [methods](https://wavesurfer.xyz/docs/api/methods)
- * [options](https://wavesurfer.xyz/docs/api/options)
- * [events](https://wavesurfer.xyz/docs/api/events)
-
-## Plugins
-
-We maintain a number of official plugins that add various extra features:
-
- * [Regions](https://wavesurfer.xyz/examples/?regions.js) – visual overlays and markers for regions of audio
- * [Timeline](https://wavesurfer.xyz/examples/?timeline.js) – displays notches and time labels below the waveform
- * [Minimap](https://wavesurfer.xyz/examples/?minimap.js) – a small waveform that serves as a scrollbar for the main waveform
- * [Envelope](https://wavesurfer.xyz/examples/?envelope.js) – a graphical interface to add fade-in and -out effects and control volume
- * [Record](https://wavesurfer.xyz/examples/?record.js) – records audio from the microphone and renders a waveform
- * [Spectrogram](https://wavesurfer.xyz/examples/?spectrogram.js) – visualization of an audio frequency spectrum (written by @akreal)
- * [Hover](https://wavesurfer.xyz/examples/?hover.js) – shows a vertical line and timestmap on waveform hover
-
-## Advanced / reactive API
-
-Beyond the imperative `wavesurfer.on(...)` events, v8 exposes a small reactive
-surface for apps that want to read state instead of tracking it themselves:
-
-```js
-const state = wavesurfer.getState()
-
-state.isPlaying.subscribe((playing) => console.log('playing:', playing))
-console.log(state.loadPhase.value) // 'idle' | 'fetching' | 'decoding' | 'ready' | 'error'
-
-const { startTime, endTime } = wavesurfer.getRenderer().getVisibleRange().value
-```
-
-`getState()` returns read-only [`Signal`](https://wavesurfer.xyz/docs/) objects
-(`.value` to read, `.subscribe(fn)` to watch) for things like `currentTime`,
-`isPlaying`, `volume`, `muted`, `loadPhase` and `scrollPosition`.
-`getRenderer().getVisibleRange()` is a derived signal with the currently visible
-`{startTime, endTime}` of the viewport, useful for plugins that need to sync to
-what's on screen (e.g. a custom minimap or timeline).
-
-If you're writing a plugin, `WaveSurfer.definePlugin(name, (ctx, options) => api)`
-is an alternative to subclassing `BasePlugin`: `ctx` gives you `{ wavesurfer, scope, state, emit }`,
-and anything you register on `ctx.scope` (listeners, timers, child scopes) is torn
-down automatically on `destroy()` — no manual cleanup array required.
-
-```js
-import WaveSurfer from 'wavesurfer.js'
-
-const MyPlugin = WaveSurfer.definePlugin('MyPlugin', (ctx, options) => {
-  ctx.scope.listen(ctx.wavesurfer.getWrapper(), 'click', () => ctx.emit('my-event'))
-  return { doSomething: () => {} }
+// 音频解码完成后自动分析
+beatgrid.on('grid-ready', (grid) => {
+  console.log(grid.bpm, grid.offset, grid.confidence)
 })
+
+// 循环第 3 小节
+beatgrid.loopBarAt(6.0)
 ```
 
-The [Spectrogram plugin](https://wavesurfer.xyz/examples/?spectrogram.js) accepts
-a `rendering: 'windowed'` option for very long audio files: it renders only the
-visible time range and evicts off-screen segments, instead of computing the
-whole file's frequency data up front.
+> 注意：插件事件在**插件实例**上触发，不会转发到 `wavesurfer` 实例
+> （上游 `registerPlugin()` 只调用 `plugin._init()`）。监听请写成
+> `beatgrid.on('grid-ready', ...)`，而不是 `wavesurfer.on('grid-ready', ...)`。
 
-```js
-SpectrogramPlugin.create({ rendering: 'windowed', /* ...other options */ })
+---
+
+## API
+
+### 选项
+
+| 选项 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `beatsPerBar` | `number` | `4` | 每小节拍数，用于区分小节线与拍线 |
+| `subdivisions` | `1 \| 2 \| 4` | `2` | 细分线密度；过密时自动降级 |
+| `showGrid` | `boolean` | `true` | 是否显示网格 |
+| `showOnsets` | `boolean` | `true` | 是否显示检测到的瞬态 |
+| `barColor` / `beatColor` / `subdivisionColor` | `string` | 琥珀色系 | 三级线条颜色 |
+| `snapRegions` | `boolean` | `false` | 区域拖拽后吸附（opt-in） |
+| `snapThreshold` | `number` | `0.5` | 吸附阈值，单位为拍 |
+| `analysis` | `AnalyzeOptions` | — | 分析参数（见下） |
+
+### 方法
+
+```ts
+analyze(): BeatGrid                 // 重新分析
+getGrid(): BeatGrid                 // 当前网格快照
+setBpm(bpm: number): BeatGrid       // 手动设定，钳制在 20..400
+nudge(beats: number): BeatGrid      // 相位微调（可为小数拍）
+setOffset(seconds: number): BeatGrid
+setBeatsPerBar(beats: number): BeatGrid
+getOnsets(): Onset[]                // 检测到的瞬态
+snapTime(time: number): number
+snapRange(start: number, end: number): { start: number; end: number }
+setVisible(v: boolean): void
+setOnsetsVisible(v: boolean): void
+tap(): number                       // 返回当前 tap-tempo 估计（0 = 尚未够两次）
+resetTap(): void
+setLoop(range: { start, end } | null): void
+loopBarAt(time?: number): void
+isLooping(): boolean
+barStartAt(time: number): number    // 已钳制为非负
+barIndexAt(time: number): number
+getRenderedLineCount(): number      // 当前实际绘制的线条数（诊断用）
 ```
 
-This replaces the standalone `WindowedSpectrogramPlugin` (`spectrogram-windowed.js`),
-which is now deprecated in favor of the merged option above — it's kept working
-as a thin backward-compatible shim, but new code should use `SpectrogramPlugin`
-directly.
+### 事件
 
-## CSS styling
+`grid-ready` · `grid-change` · `onsets-ready` · `loop-change` · `tap-tempo` · `destroy`
 
-wavesurfer.js v7 is rendered into a Shadow DOM tree. This isolates its CSS from the rest of the web page.
-However, it's still possible to style various wavesurfer.js elements with CSS via the `::part()` pseudo-selector.
-For example:
+### 分析参数（`AnalyzeOptions`）
 
-```css
-#waveform ::part(cursor):before {
-  content: '🏄';
-}
-#waveform ::part(region) {
-  font-family: fantasy;
-}
-```
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `fftSize` | `1024` | 必须是 2 的幂且 ≥ 32 |
+| `hopSize` | `fftSize / 4` | 帧移 |
+| `minBpm` / `maxBpm` | `60` / `200` | 搜索范围 |
+| `sensitivity` | `0.5` | 0 = 只抓强瞬态，1 = 宽松 |
+| `minOnsetGap` | `0.05` | 最小瞬态间隔（秒） |
 
-You can see which elements you can style in the DOM inspector – they will have a `part` attribute.
-See [this example](https://wavesurfer.xyz/examples/?styling.js) to play around with styling.
+---
 
-## Questions
-
-Have a question about integrating wavesurfer.js on your website? Feel free to ask in our [Discussions forum](https://github.com/wavesurfer-js/wavesurfer.js/discussions/categories/q-a).
-
-However, please keep in mind that this forum is dedicated to wavesurfer-specific questions. If you're new to JavaScript and need help with the general basics like importing NPM modules, please consider asking ChatGPT or StackOverflow first.
-
-### FAQ
-
-<details>
-  <summary>I'm having CORS issues</summary>
-  Wavesurfer fetches audio from the URL you specify in order to decode it. Make sure this URL allows fetching data from your domain. In browser JavaScript, you can only fetch data eithetr from <b>the same domain</b> or another domain if and only if that domain enables <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">CORS</a>. So if your audio file is on an external domain, make sure that domain sends the right Access-Control-Allow-Origin headers. There's nothing you can do about it from the requesting side (i.e. your JS code).
-</details>
-
-<details>
-  <summary>Does wavesurfer support large files?</summary>
-  Since wavesurfer decodes audio entirely in the browser using Web Audio, large clips may fail to decode due to memory constraints. We recommend using pre-decoded peaks for large files (see <a href="https://wavesurfer.xyz/examples/?predecoded.js">this example</a>). You can use a tool like <a href="https://codeberg.org/chrisn/audiowaveform">audiowaveform</a> to generate peaks.
-</details>
-
-<details>
-  <summary>What about streaming audio?</summary>
-  Streaming audio is supported only with <a href="https://wavesurfer.xyz/examples/?predecoded.js">pre-decoded peaks and duration</a>.
-</details>
-
-<details>
-  <summary>There is a mismatch between my audio and the waveform. How do I fix it?</summary>
-  If you're using a VBR (variable bit rate) audio file, there might be a mismatch between the audio and the waveform. This can be fixed by converting your file to CBR (constant bit rate).
-  <p>Alternatively, you can use the <a href="https://wavesurfer.xyz/examples/?webaudio-shim.js">Web Audio shim</a> which is more accurate.</p>
-</details>
-
-<details>
-  <summary>How do I connect wavesurfer.js to Web Audio effects?</summary>
-Generally, wavesurfer.js doesn't aim to be a wrapper for all things Web Audio. It's just a player with a waveform visualization. It does allow connecting itself to a Web Audio graph by exporting its audio element (see <a href="https://wavesurfer.xyz/examples/?4436ec40a2ab943243755e659ae32196">this example</a>) but nothign more than that. Please don't expect wavesurfer to be able to cut, add effects, or process your audio in any way.
-</details>
-
-<details>
-  <summary>Why does my waveform look asymmetrical?</summary>
-  By default, wavesurfer.js renders stereo audio as a single waveform, with the left channel on the top half and the right channel on the bottom half. If your audio has hard-panned sounds, this will result in an asymmetrical waveform.
-  To render each channel separately, use the <code>splitChannels</code> option.
-</details>
-
-## Development
-
-To get started with development, follow these steps:
-
- 1. Install dev dependencies:
+## 算法
 
 ```
-yarn
+PCM ──► 分帧 → Hann 窗 → FFT → 幅度谱
+           │
+           ├─► 对数压缩谱通量 ──► 自适应阈值 ──► 瞬态列表（供吸附与可视化）
+           │
+           └─► 瞬态强度包络 ──► 候选 BPM 扫描
+                                    └─► 梳状能量 × 齿能量均匀性² × 齿覆盖率
+                                            └─► 相位拟合（1 ms 扫描）
 ```
 
- 2. Start the TypeScript compiler in watch mode and launch an HTTP server:
+三项乘积的每一项都是因为更简单的方案实测失败才引入的，详见 [`TECHNICAL.md`](./TECHNICAL.md)。
 
-```
-yarn start
-```
+---
 
-This command will open http://localhost:9090 in your browser with live reload, allowing you to see the changes as you develop.
+## 测试
 
-## Tests
-
-The tests are written in the Cypress framework. They are a mix of e2e and visual regression tests.
-
-To run the test suite locally, first build the project:
-```
-yarn build
+```bash
+npm run test:unit            # 全部单元测试（含上游 920 项）
+npm run test:unit -- src/__tests__/beat-analysis.test.ts   # 只跑新增分析测试
+node tools/verify.mjs        # 浏览器验收（需先起服务，见上）
 ```
 
-Then launch the tests:
+最近一次执行结果见 [`TEST-REPORT.md`](./TEST-REPORT.md)。
+
+---
+
+## 目录结构
+
 ```
-yarn cypress
+src/beat-analysis.ts          新增：DSP 与节拍估计（纯函数，无 DOM 依赖）
+src/plugins/beatgrid.ts       新增：网格插件（overlay / 吸附 / 循环 / tap）
+src/__tests__/beat-analysis.test.ts   新增：合成信号真值测试
+src/__tests__/beatgrid.test.ts        新增：插件 DOM 与交互测试
+src/__tests__/demo-audio.test.ts      新增：真实鼓点精度测试
+demo/                         新增：交互演示页
+scripts/make-demo-audio.mjs   新增：程序化生成演示音频
+tools/verify.mjs              新增：Chromium 验收脚本
 ```
 
-## Feedback
+上游文件仅两处非行为性修改（均为 Windows 可移植性修复），见 `NOTICE`。
 
-We appreciate your feedback and contributions!
+---
 
-If you encounter any issues or have suggestions for improvements, please don't hesitate to post in our [forum](https://github.com/wavesurfer-js/wavesurfer.js/discussions/categories/q-a).
+## 许可证
 
-We hope you enjoy using wavesurfer.js and look forward to hearing about your experiences with the library!
+BSD-3-Clause，与上游一致。上游版权归 katspaugh and contributors（2012-2023）。
+新增部分版权声明见 [`NOTICE`](./NOTICE)。
+
+演示音频由 `scripts/make-demo-audio.mjs` 程序化合成，以 CC0-1.0 释出，不含任何第三方素材。
